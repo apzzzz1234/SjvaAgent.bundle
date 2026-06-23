@@ -351,12 +351,14 @@ class ModuleKtv(AgentBase):
         return tvdb_id
 
     def update_episode(self, show_epi_info, episode, info_json, is_write_json, meta_code, frequency=None):
-        site_orders = ['daum', 'tving', 'wavve']
+        site_orders = ['daum', 'tving', 'wavve', 'tmdb']
         if isinstance(meta_code, str) and len(meta_code) > 1:
             if meta_code[1] == "W":
                 site_orders.sort(key=lambda x: x != "wavve")
             elif meta_code[1] == "V":
                 site_orders.sort(key=lambda x: x != "tving")
+            elif meta_code[1] == "T":
+                site_orders.sort(key=lambda x: x != "tmdb")
 
         def get_daum_episode_info(code, info_json, is_write_json, module_name, send_episode_info_func):
             if not code:
