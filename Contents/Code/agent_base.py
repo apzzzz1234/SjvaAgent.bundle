@@ -96,7 +96,7 @@ class AgentBase(object):
         return wrapper_function
 
 
-    def send_search(self, module_name, keyword, manual, year=''):
+    def send_search(self, module_name, keyword, manual, year='', media_path=None):
         try:
             url = self.get_api_url(module_name, "search")
             url = url + "&keyword={keyword}&manual={manual}&year={year}".format(
@@ -104,6 +104,10 @@ class AgentBase(object):
                 manual=manual,
                 year=year,
             )
+            if media_path:
+                url = url + "&media_path={media_path}".format(
+                    media_path=String.Quote(media_path.encode('utf-8'))
+                )
             values = {'apikey': self.get_ff_apikey(module_name)}
             return AgentBase.my_JSON_ObjectFromURL(url, method="POST", values=values)
         except Exception as e:

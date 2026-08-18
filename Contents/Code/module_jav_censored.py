@@ -7,6 +7,7 @@ Regex = Regex # type: Framework.api.utilkit.RegexKit
 Datetime = Datetime # Framework.api.utilkit.DatetimeKit
 HTTP = HTTP # type: Framework.api.networkkit.HTTPKit
 Proxy = Proxy # type: Framework.api.modelkit.ProxyKit
+Prefs = Prefs # type: Framework.api.preferencekit.PreferenceKit
 MetadataSearchResult = MetadataSearchResult # type: Framework.objects.MetadataSearchResult
 TrailerObject = TrailerObject # type: Framework.modelling.objects.ModelInterfaceObjectMetaclass
 
@@ -14,31 +15,38 @@ TrailerObject = TrailerObject # type: Framework.modelling.objects.ModelInterface
 class ModuleJavCensoredBase(AgentBase):
     def get_search_keyword(self, media, manual, from_file=False):
         try:
+            file_path = None
+            try:
+                data = AgentBase.my_JSON_ObjectFromURL('http://127.0.0.1:32400/library/metadata/%s' % media.id)
+                if data and 'MediaContainer' in data and 'Metadata' in data['MediaContainer']:
+                    file_path = data['MediaContainer']['Metadata'][0]['Media'][0]['Part'][0]['file']
+            except Exception:
+                pass
+
             if manual:
                 ret = unicodedata.normalize('NFKC', unicode(media.name)).strip()
             else:
-                if from_file:
-                    data = AgentBase.my_JSON_ObjectFromURL('http://127.0.0.1:32400/library/metadata/%s' % media.id)
-                    filename = data['MediaContainer']['Metadata'][0]['Media'][0]['Part'][0]['file']
-                    ret = os.path.splitext(os.path.basename(filename))[0]
-                    ret = re.sub('\s*\[.*?\]', '', ret).strip()
+                if from_file and file_path:
+                    ret = os.path.splitext(os.path.basename(file_path))[0]
+                    ret = re.sub(r'\s*\[.*?\]', '', ret).strip()
                     match = Regex(r'(?P<cd>cd\d{1,2})$').search(ret)
                     if match:
                         ret = ret.replace(match.group('cd'), '').strip()
                 else:
-                    # from_scanner
                     ret = media.name
-            ret = ret.replace(' ', '-').replace('JAVALL|', '')
+
+            ret = ret.replace('JAVALL|', '').strip()
             if getattr(self, 'module_name', '') != 'western':
                 ret = ret.replace(' ', '-')
 
-            return ret
+            return ret, file_path
         except Exception as e:
             Log.Exception(str(e))
+            return media.name, None
 
 
-    def base_search(self, results, media, lang, manual, keyword):
-        if manual and media.name is not None and media.name.startswith(('CD', 'CB', 'CT', 'CJ')):
+    def base_search(self, results, media, lang, manual, keyword, media_path=None):
+        if manual and media.name is not None and media.name.startswith(('CD', 'CB', 'CT', 'CJ', 'WP', 'WS')):
             code = media.name
             meta = MetadataSearchResult(id=code, name=code, year=1900, score=100, thumb="", lang=lang)
             results.Append(meta)
@@ -54,17 +62,25 @@ class ModuleJavCensoredBase(AgentBase):
                     results.Append(meta)
                     return True
 
-        data = self.send_search(self.module_name, keyword, manual)
+        data = self.send_search(self.module_name, keyword, manual, media_path=media_path)
+
+        use_fallback = Prefs['jav_search_all'] if 'jav_search_all' in Prefs else Prefs.get('jav_dvd_search_all', True)
+        if (not data or (len(data) > 0 and data[0].get('score', 0) < 80)) and self.module_name != 'western' and use_fallback:
+            Log("JAV search failed for '%s'. Falling back to Western module..." % keyword)
+            fallback_data = self.send_search('western', keyword, manual, media_path=media_path)
+            if fallback_data:
+                data = fallback_data
 
         for item in data:
-            #title = '[%s]%s' % (item['ui_code'], String.DecodeHTMLEntities(String.StripTags(item['title_ko'])).strip())
-            display_name = item.get('title') if getattr(self, 'module_name', '') == 'western' else item.get('ui_code')
+            is_western_item = item.get('code', '').startswith('W') or getattr(self, 'module_name', '') == 'western'
+            display_name = item.get('title') if is_western_item else item.get('ui_code')
 
+            site_name = item.get('site', 'stashdb' if item.get('code', '').startswith('WS') else 'tpdb')
             if item.get('year') != '' and item.get('year') is not None:
-                title = '{} / {} / {}'.format(display_name, item.get('year'), item.get('site', 'tpdb'))
+                title = '{} / {} / {}'.format(display_name, item.get('year'), site_name)
                 year = item['year']
             else:
-                title = '{} / {}'.format(display_name, item.get('site', 'tpdb'))
+                title = '{} / {}'.format(display_name, site_name)
                 year = ''
             meta = MetadataSearchResult(id=item['code'], name=title, year=year, score=item['score'], thumb=item['image_url'], lang=lang)
             meta.summary = self.change_html(item['title_ko'])
@@ -84,7 +100,15 @@ class ModuleJavCensoredBase(AgentBase):
             if info_json is not None and info_json['code'] == metadata.id:
                 data = info_json
         if data is None:
-            data = self.send_info(self.module_name, metadata.id)
+            target_module = self.module_name
+            if metadata.id.startswith(('WP', 'WS', 'W')):
+                target_module = 'western'
+            elif metadata.id.startswith(('E', 'ED', 'EM', 'EP', 'EH', 'EC', 'EF')):
+                target_module = 'jav_uncensored'
+            elif metadata.id.startswith(('C', 'CD', 'CB', 'CT', 'CM', 'CJ')):
+                target_module = 'jav_censored'
+
+            data = self.send_info(target_module, metadata.id)
             if data is not None and self.is_write_json(media):
                 self.save_info(media, data)
 
@@ -175,8 +199,8 @@ class ModuleJavCensoredBase(AgentBase):
 
 
     def search(self, results, media, lang, manual):
-        keyword = self.get_search_keyword(media, manual, from_file=True)
-        return self.base_search(results, media, lang, manual, keyword)
+        keyword, media_path = self.get_search_keyword(media, manual, from_file=True)
+        return self.base_search(results, media, lang, manual, keyword, media_path=media_path)
 
     def update(self, metadata, media, lang):
         self.base_update(metadata, media, lang)
