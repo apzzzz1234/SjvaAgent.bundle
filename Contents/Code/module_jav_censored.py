@@ -46,49 +46,78 @@ class ModuleJavCensoredBase(AgentBase):
 
 
     def base_search(self, results, media, lang, manual, keyword, media_path=None):
-        if manual and media.name is not None and media.name.startswith(('CD', 'CB', 'CT', 'CJ', 'WP', 'WS')):
-            code = media.name
-            meta = MetadataSearchResult(id=code, name=code, year=1900, score=100, thumb="", lang=lang)
-            results.Append(meta)
-            return True
+        try:
+            if manual and media.name is not None and media.name.startswith(('CD', 'CB', 'CT', 'CJ', 'WP', 'WS', 'W')):
+                code = media.name
+                meta = MetadataSearchResult(id=code, name=code, year=1900, score=100, thumb="", lang=lang)
+                results.Append(meta)
+                return True
 
-        if self.is_read_json(media):
-            if manual:
-                self.remove_info(media)
-            else:
-                info_json = self.get_info_json(media)
-                if info_json is not None:
-                    meta = MetadataSearchResult(id=info_json['code'], name=info_json['title'], year=info_json['year'], score=100, thumb="", lang=lang)
-                    results.Append(meta)
-                    return True
+            if self.is_read_json(media):
+                if manual:
+                    self.remove_info(media)
+                else:
+                    info_json = self.get_info_json(media)
+                    if info_json is not None:
+                        meta = MetadataSearchResult(id=info_json['code'], name=info_json['title'], year=info_json['year'], score=100, thumb="", lang=lang)
+                        results.Append(meta)
+                        return True
 
-        data = self.send_search(self.module_name, keyword, manual, media_path=media_path)
+            data = self.send_search(self.module_name, keyword, manual, media_path=media_path)
+            if not isinstance(data, list):
+                data = []
 
-        use_fallback = Prefs['jav_search_all'] if 'jav_search_all' in Prefs else Prefs.get('jav_dvd_search_all', True)
-        if (not data or (len(data) > 0 and data[0].get('score', 0) < 80)) and self.module_name != 'western' and use_fallback:
-            Log("JAV search failed for '%s'. Falling back to Western module..." % keyword)
-            fallback_data = self.send_search('western', keyword, manual, media_path=media_path)
-            if fallback_data:
-                data = fallback_data
+            use_fallback = True
+            try:
+                use_fallback = bool(Prefs['jav_search_all'])
+            except Exception:
+                try:
+                    use_fallback = bool(Prefs['jav_dvd_search_all'])
+                except Exception:
+                    use_fallback = True
 
-        for item in data:
-            is_western_item = item.get('code', '').startswith('W') or getattr(self, 'module_name', '') == 'western'
-            display_name = item.get('title') if is_western_item else item.get('ui_code')
+            if (not data or (len(data) > 0 and int(data[0].get('score', 0)) < 80)) and self.module_name != 'western' and use_fallback:
+                Log("JAV search failed/low score for '%s'. Falling back to Western module..." % keyword)
+                fallback_data = self.send_search('western', keyword, manual, media_path=media_path)
+                if fallback_data and isinstance(fallback_data, list):
+                    data = fallback_data
 
-            site_name = item.get('site', 'stashdb' if item.get('code', '').startswith('WS') else 'tpdb')
-            if item.get('year') != '' and item.get('year') is not None:
-                title = '{} / {} / {}'.format(display_name, item.get('year'), site_name)
-                year = item['year']
-            else:
-                title = '{} / {}'.format(display_name, site_name)
-                year = ''
-            meta = MetadataSearchResult(id=item['code'], name=title, year=year, score=item['score'], thumb=item['image_url'], lang=lang)
-            meta.summary = self.change_html(item['title_ko'])
-            meta.type = "movie"
-            results.Append(meta)
-        if len(data) > 0 and data[0]['score'] >= 80:
-            return True
-        return False
+            for item in data:
+                if not isinstance(item, dict):
+                    continue
+
+                is_western_item = str(item.get('code', '')).startswith('W') or getattr(self, 'module_name', '') == 'western'
+                raw_display = item.get('title') if is_western_item else item.get('ui_code')
+                display_name = unicode(raw_display if raw_display is not None else '')
+
+                raw_site = item.get('site') or ('stashdb' if str(item.get('code', '')).startswith('WS') else 'tpdb')
+                site_name = unicode(raw_site)
+
+                year_val = item.get('year')
+                if year_val not in ['', None, 0, 1900]:
+                    year_str = unicode(year_val)
+                    title = u"%s / %s / %s" % (display_name, year_str, site_name)
+                    item_year = int(year_val)
+                else:
+                    title = u"%s / %s" % (display_name, site_name)
+                    item_year = None
+
+                item_score = int(round(float(item.get('score', 0))))
+                item_thumb = str(item.get('image_url') or '')
+
+                meta = MetadataSearchResult(id=str(item['code']), name=title, year=item_year, score=item_score, thumb=item_thumb, lang=lang)
+                if item.get('title_ko'):
+                    meta.summary = unicode(item['title_ko'])
+                meta.type = "movie"
+                results.Append(meta)
+
+            if len(data) > 0 and int(data[0].get('score', 0)) >= 80:
+                return True
+            return False
+
+        except Exception as e:
+            Log.Exception("base_search 예외 발생: %s" % str(e))
+            return False
 
 
 
