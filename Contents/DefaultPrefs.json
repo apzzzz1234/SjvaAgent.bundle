@@ -42,11 +42,11 @@
 		"default": ""
 	},
 	{
-		"id": "jav_dvd_search_all",
-		"label": "JAV Censored로 통합 사용. (검색 실패시 Uncensored, Western 순으로 시도)",
-		"type": "bool",
-		"option": "True",
-		"default": "True"
+        "id": "jav_search_all",
+        "label": "JAV/Western 통합 검색 (JAV 검색 실패 시 Western 에이전트로 자동 폴백)",
+        "type": "bool",
+        "option": "True",
+        "default": "True"
 	},
 	{
 		"id": "collection_disalbed",
