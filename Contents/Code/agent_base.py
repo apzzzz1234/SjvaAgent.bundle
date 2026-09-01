@@ -605,9 +605,10 @@ class AgentBase(object):
                 meta.clear()
                 for person in value:
                     meta_person = meta.new()
-                    meta_person.name = self.get(person, 'name', None)
-                    meta_person.role = self.get(person, 'role', None)
-                    meta_person.photo = self.get(person, 'photo', None)
+                    display_name = self.get(person, 'name_ko', None) or self.get(person, 'name_org', None) or self.get(person, 'name', None)
+                    meta_person.name = display_name
+                    meta_person.role = self.get(person, 'name_org', None) or self.get(person, 'role', None)
+                    meta_person.photo = self.get(person, 'photo', None) or self.get(person, 'thumb', None)
             elif is_primary:
                 meta.clear()
 
@@ -843,12 +844,12 @@ class AgentBase(object):
     def set_roles(self, metadata, remote_metadata, role_types=('actor',)):
         for role_type in role_types:
             for item in remote_metadata.get(role_type) or ():
-                name = item.get('name') or item.get('name2') or item.get('name_original')
-                if name:
+                display_name = item.get('name_ko') or item.get('name_org') or item.get('name') or item.get('name_en') or item.get('name2') or item.get('name_original')
+                if display_name:
                     actor = metadata.roles.new()
-                    actor.name = name
-                    actor.role = item.get('role') or '출연'
-                    actor.photo = item.get('thumb') or item.get('image')
+                    actor.name = display_name
+                    actor.role = item.get('name_org') or item.get('originalname') or item.get('role') or '출연'
+                    actor.photo = item.get('thumb') or item.get('photo') or item.get('image')
                 #Log.Debug('%s - %s'% (actor.name, actor.photo))
 
 
