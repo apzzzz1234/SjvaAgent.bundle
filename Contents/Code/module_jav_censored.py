@@ -215,10 +215,15 @@ class ModuleJavCensoredBase(AgentBase):
         if 'actor' in data and data['actor'] is not None:
             metadata.roles.clear()
             for item in data['actor']:
-                actor = metadata.roles.new()
-                actor.role = item['originalname']
-                actor.name = item['name']
-                actor.photo = item['thumb']
+                if not isinstance(item, dict):
+                    continue
+
+                display_name = item.get('name_ko') or item.get('name_org') or item.get('name') or item.get('name_en')
+                if display_name:
+                    actor = metadata.roles.new()
+                    actor.name = display_name
+                    actor.role = item.get('name_org') or item.get('originalname') or item.get('role')
+                    actor.photo = item.get('thumb') or item.get('photo') or item.get('image')
 
         if 'extras' in data and data['extras'] is not None:
             for item in data['extras']:
