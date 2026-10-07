@@ -18,26 +18,31 @@ class ModuleMovie(AgentBase):
         # Local opt-in policy survives bundle replacement. Never touch the media file.
         if not os.path.isfile(POLICY_PATH):
             return False
+        stage = 'policy'
         try:
             entries = load_policy(POLICY_PATH)
             if not entries:
                 return False
+            stage = 'media-id'
             media_id = str(media.id)
             if not media_id.isdigit():
                 return False
+            stage = 'plex-metadata'
             data = self.my_JSON_ObjectFromURL(
                 'http://127.0.0.1:32400/library/metadata/%s' % media_id)
             container = data['MediaContainer']
             items = container.get('Metadata') or []
             if len(items) != 1:
                 return False
+            stage = 'match'
             matched = matches_movie(entries, container.get('librarySectionID'), items[0])
             if matched:
                 Log.Info('[JSON exclusion] metadata_id=%s; remote metadata, media JSON untouched', media_id)
             return matched
-        except Exception:
+        except Exception as error:
             # Invalid config or API failure must not expand the exclusion scope.
-            Log.Warn('[JSON exclusion] policy lookup failed; preserving upstream behavior')
+            Log.Warn('[JSON exclusion] lookup failed at %s (%s); preserving upstream behavior',
+                     stage, type(error).__name__)
             return False
 
     def is_read_json(self, media):

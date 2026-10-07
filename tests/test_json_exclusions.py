@@ -15,6 +15,12 @@ ITEM = {'type': 'movie', 'Media': [{'Part': [{'file': ENTRY['file']}]}]}
 
 
 class PolicyTests(unittest.TestCase):
+    def test_plex_sandbox_no_generator_closures(self):
+        path = os.path.join(ROOT, 'Contents', 'Code', 'json_exclusions.py')
+        with io.open(path, encoding='utf-8') as f:
+            tree = ast.parse(f.read())
+        self.assertFalse(any(isinstance(node, ast.GeneratorExp) for node in ast.walk(tree)))
+
     def test_exact(self):
         self.assertTrue(matches_movie([ENTRY], '2', ITEM))
 

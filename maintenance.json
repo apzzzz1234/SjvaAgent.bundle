@@ -13,6 +13,7 @@
     "No automatic refresh, rematch or artwork selection occurs when editing the policy."
   ],
   "validation": "python -m unittest discover -s tests -v; additionally verify Python 2.7 syntax and Plex runtime on the deployment host",
+  "runtime_note": "Plex restricted Python 2 execution raised NameError for a generator closure during matching. Explicit loops are required; the movie refresh then correctly loaded remote metadata and artwork on the pilot host (2026-10-07).",
   "upstream_update_procedure": [
     "Fetch upstream and review changes since upstream_baseline, especially JSON read/write/delete, ModuleMovie, agent SDK and image installer behavior.",
     "Merge upstream into a review branch without removing the exclusion hooks.",

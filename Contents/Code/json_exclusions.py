@@ -44,6 +44,11 @@ def matches_movie(entries, section_id, item):
         for part in media.get('Part') or []:
             if isinstance(part.get('file'), string_types):
                 files.add(part['file'])
-    return any(entry.get('enabled', True) and
-               entry['section_id'] == str(section_id) and
-               entry['file'] in files for entry in entries)
+    # Plex's restricted Python 2 sandbox cannot reliably resolve closure names
+    # inside generator expressions. Keep matching as a plain loop.
+    for entry in entries:
+        if (entry.get('enabled', True) and
+                entry['section_id'] == str(section_id) and
+                entry['file'] in files):
+            return True
+    return False
