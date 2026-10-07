@@ -1,1 +1,3 @@
 .noupdate
+__pycache__/
+*.pyc

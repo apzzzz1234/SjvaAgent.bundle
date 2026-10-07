@@ -1,0 +1,27 @@
+{
+  "upstream": "https://github.com/halfaider/SjvaAgent.bundle",
+  "upstream_baseline": "7da0ba27e0be3702054722323e03e128022b0be5",
+  "feature": "Movie-only, exact-path JSON exclusions for read-only media mounts",
+  "policy_path": "/config/icc-sjva/json-exclusions.json",
+  "policy_example": {"version": 1, "movies": [{"section_id": "2", "file": "/mnt/media/example/movie.mkv", "enabled": true}]},
+  "behavior": [
+    "Only ModuleMovie is extended; other agent modules retain upstream behavior.",
+    "An exact library section ID and complete Plex file path opt a movie out of JSON reading, writing and removal.",
+    "Missing or invalid policy preserves upstream behavior and invalid policy emits a warning.",
+    "An empty movies list or enabled=false restores JSON usage on the next refresh.",
+    "The original remote info.json is never edited by the exclusion feature.",
+    "No automatic refresh, rematch or artwork selection occurs when editing the policy."
+  ],
+  "validation": "python -m unittest discover -s tests -v; additionally verify Python 2.7 syntax and Plex runtime on the deployment host",
+  "upstream_update_procedure": [
+    "Fetch upstream and review changes since upstream_baseline, especially JSON read/write/delete, ModuleMovie, agent SDK and image installer behavior.",
+    "Merge upstream into a review branch without removing the exclusion hooks.",
+    "Run unit tests plus the container Python 2.7 compatibility check.",
+    "Back up Compose, Plex database and agents; check for active playback before maintenance.",
+    "Test one excluded movie and one unchanged JSON-backed movie on the pilot server.",
+    "Confirm original media JSON hash is unchanged, then publish a new immutable deployment tag and update MORE_BUNDLES.",
+    "Verify restart persistence and maintain rollback images/configuration; do not propagate to other servers without approval."
+  ],
+  "rollback": "Restore the previous MORE_BUNDLES source/tag and recreate Plex only. Retain the external policy for later reuse. If reverting metadata is required, use the protected pre-change snapshot; do not overwrite the full live DB while Plex is running.",
+  "automation": "Upstream updates are reviewed on request; no unattended merge or deployment is configured."
+}

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import re, unicodedata, random, time
+import os
 from .agent_base import AgentBase
+from .json_exclusions import POLICY_PATH, load_policy, matches_movie
 
 Log = Log # type: Framework.api.logkit.LogKit
 Regex = Regex # type: Framework.api.utilkit.RegexKit
@@ -11,6 +13,47 @@ FeaturetteObject = FeaturetteObject # type: Framework.modelling.objects.ModelInt
 
 class ModuleMovie(AgentBase):
     module_name = 'movie'
+
+    def is_json_excluded(self, media):
+        # Local opt-in policy survives bundle replacement. Never touch the media file.
+        if not os.path.isfile(POLICY_PATH):
+            return False
+        try:
+            entries = load_policy(POLICY_PATH)
+            if not entries:
+                return False
+            media_id = str(media.id)
+            if not media_id.isdigit():
+                return False
+            data = self.my_JSON_ObjectFromURL(
+                'http://127.0.0.1:32400/library/metadata/%s' % media_id)
+            container = data['MediaContainer']
+            items = container.get('Metadata') or []
+            if len(items) != 1:
+                return False
+            matched = matches_movie(entries, container.get('librarySectionID'), items[0])
+            if matched:
+                Log.Info('[JSON exclusion] metadata_id=%s; remote metadata, media JSON untouched', media_id)
+            return matched
+        except Exception:
+            # Invalid config or API failure must not expand the exclusion scope.
+            Log.Warn('[JSON exclusion] policy lookup failed; preserving upstream behavior')
+            return False
+
+    def is_read_json(self, media):
+        if self.is_json_excluded(media):
+            return False
+        return super(ModuleMovie, self).is_read_json(media)
+
+    def is_write_json(self, media):
+        if self.is_json_excluded(media):
+            return False
+        return super(ModuleMovie, self).is_write_json(media)
+
+    def remove_info(self, media):
+        if self.is_json_excluded(media):
+            return
+        return super(ModuleMovie, self).remove_info(media)
 
     def search(self, results, media, lang, manual, **kwargs):
         try:
